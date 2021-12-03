@@ -1,14 +1,5 @@
 open Genlex
 
-let process_lines filename line_reader acc =
-    let chan = open_in filename in
-    let rec process_line infile reader a =
-        try process_line infile reader (reader (input_line infile))
-        with End_of_file -> close_in infile; a
-    in
-    process_line chan line_reader acc
-;;
-
 let command_lexer = make_lexer ["forward"; "down"; "up";];;
 
 type command  =
@@ -20,23 +11,23 @@ type command  =
 exception Parse_Exception
 
 let rec parse_command token_stream =
-    try
-        match (Stream.next token_stream, Stream.next token_stream) with
-        | (Kwd "forward", Int n) -> CmdForward n
-        | (Kwd "down", Int n) -> CmdDown n
-        | (Kwd "up", Int n) -> CmdUp n
-        | _ -> raise Parse_Exception
-    with Stream.Failure -> raise Parse_Exception
+    match (Stream.next token_stream, Stream.next token_stream) with
+    | (Kwd "forward", Int n) -> CmdForward n
+    | (Kwd "down", Int n) -> CmdDown n
+    | (Kwd "up", Int n) -> CmdUp n
+    | _ -> raise Parse_Exception
 ;;
 
 let load_cmd_queue filename =
+    let tokens = command_lexer (Stream.of_channel (open_in filename)) in
     let cmd_queue = Queue.create () in
-    let add_command line =
-        let command = parse_command (command_lexer (Stream.of_string line)) in
+    let rec add_command tks =
+        let command = parse_command tokens in
         Queue.add command cmd_queue;
-        cmd_queue
+        try add_command tks
+        with Stream.Failure -> cmd_queue
     in
-    process_lines filename add_command cmd_queue
+    add_command tokens
 ;;
 
 let rec naive_commands (h, d) command_queue =
